@@ -1,0 +1,2 @@
+#!/bin/bash
+/var/vcap/packages/docker/bin/docker -H unix:///var/vcap/sys/run/docker/dockerd.sock $@

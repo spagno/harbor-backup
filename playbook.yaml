@@ -1,0 +1,55 @@
+---
+- name: Run command on Harbor
+  gather_facts: false
+  become: true
+  hosts: harbor
+  tasks:
+    - name: Copy Docker wrap script
+      copy:
+        src: scripts/docker
+        dest: /usr/local/bin/docker
+        mode: '770'
+    - name: ensure the directory backup exists
+      file:
+        path: /var/vcap/store/backup
+        state: directory
+    - name: Copy Backup Script (if not exist)
+      copy:
+        src: scripts/67558_harbor-backup.sh
+        dest: /var/vcap/store/backup/67558_harbor-backup.sh
+        force: no
+        mode: '770'
+    - name: Copy Restore Script (if not exist)
+      copy:
+        src: scripts/67558_harbor-restore.sh
+        dest: /var/vcap/store/backup/67558_harbor-restore.sh
+        force: no
+        mode: '770'
+    - name: Stop Harbor
+      shell:
+        cmd: "monit stop harbor"
+    - name: Check if containers are down
+      shell: RESULT=$(docker ps -q) ; if [ -z "${RESULT}" ] ; then echo "empty" ; fi
+      register: result
+      until: result.stdout == "empty"
+      retries: 10
+      delay: 30
+    - name: Start the backup
+      shell:
+        cmd: "/var/vcap/store/backup/67558_harbor-backup.sh --istile"
+        chdir: "/var/vcap/store/backup"
+      register: backup_output
+    - set_fact:
+        backup_file: "{{ backup_output.stdout_lines[-1].split(' ')[-1][:-1] }}"
+    - name: Start Harbor
+      shell:
+        cmd: "monit start harbor"
+      register: start_harbor
+    - name: Change the owner to "{{ ansible_ssh_user }}"
+      shell:
+        cmd: "chown {{ ansible_ssh_user }} {{ backup_file }}"
+        chdir: "/var/vcap/store/backup"
+    - name: Copy the backup locally
+      shell:
+        cmd: "sshpass -p '{{ ansible_ssh_pass }}' scp {{ ansible_ssh_user }}@{{ inventory_hostname }}:/var/vcap/store/backup/{{ backup_file }} ."
+      delegate_to: 127.0.0.1

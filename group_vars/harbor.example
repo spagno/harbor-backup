@@ -1,0 +1,4 @@
+---
+ansible_ssh_user: vcap
+ansible_ssh_pass: 'harbor_ssh_pass'
+ansible_sudo_pass: 'harbor_sudo_pass'
